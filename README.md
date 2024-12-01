@@ -1,0 +1,1 @@
+Run like: `carg run --bin day01 ...`
