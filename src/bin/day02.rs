@@ -28,6 +28,22 @@ impl Report {
         }
         true
     }
+
+    fn is_dampened_safe(&self) -> bool {
+        if self.is_safe() {
+            return true;
+        }
+        for (pos, _) in self.0.iter().enumerate() {
+            let r = self.0.iter().enumerate()
+                .filter(|(p, _)| *p != pos)
+                .map(|(_, i)| *i)
+                .collect::<Vec<i64>>();
+            if Report(r).is_safe() {
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
 fn parse(fname: String) -> Result<Vec<Report>> {
@@ -53,10 +69,17 @@ fn part1(reports: &Vec<Report>) -> usize {
     reports.iter().filter(|r| r.is_safe()).count()
 }
 
+fn part2(reports: &Vec<Report>) -> usize {
+    reports.iter().filter(|r| r.is_dampened_safe()).count()
+}
+
 fn main() {
     let fname = args().nth(1).unwrap();
     let reports = parse(fname).unwrap();
 
     let safe_count = part1(&reports);
     println!("Part 1: {}", safe_count);
+
+    let dampened_safe_count = part2(&reports);
+    println!("Part 2: {}", dampened_safe_count);
 }
