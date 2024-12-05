@@ -19,6 +19,27 @@ impl Dir {
         Self { dx: 1, dy: -1 },
         Self { dx: -1, dy: -1 },
     ];
+
+    const DIAGONAL: [Self; 4] = [
+        Self { dx: 1, dy: 1 },
+        Self { dx: -1, dy: 1 },
+        Self { dx: 1, dy: -1 },
+        Self { dx: -1, dy: -1 },
+    ];
+
+    fn rotate90(&self) -> Self {
+        Self {
+            dx: -self.dy,
+            dy: self.dx,
+        }
+    }
+
+    fn invert(&self) -> Self {
+        Self {
+            dx: -self.dx,
+            dy: -self.dy,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -110,6 +131,27 @@ impl Grid {
     fn part1(&self) -> i64 {
         self.count_word("XMAS")
     }
+
+    fn check_cross_mas_at(&self, pos: &Pos, dir: &Dir) -> bool {
+        let d90 = dir.rotate90();
+        self.get(pos) == Some('A')
+            && self.get(&pos.next(dir)) == Some('M')
+            && self.get(&pos.next(&d90)) == Some('M')
+            && self.get(&pos.next(&dir.invert())) == Some('S')
+            && self.get(&pos.next(&d90.invert())) == Some('S')
+    }
+
+    fn part2(&self) -> i64 {
+        let mut tot = 0;
+        for pos in self.positions() {
+            for dir in &Dir::DIAGONAL {
+                if self.check_cross_mas_at(&pos, &dir) {
+                    tot += 1;
+                }
+            }
+        }
+        tot
+    }
 }
 
 struct PosIter<'a> {
@@ -138,4 +180,5 @@ fn main() {
     let fname = args().nth(1).unwrap();
     let grid = Grid::new(&fname).unwrap();
     println!("Part 1: {}", grid.part1());
+    println!("Part 2: {}", grid.part2());
 }
