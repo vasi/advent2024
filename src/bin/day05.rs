@@ -6,6 +6,51 @@ type Edges = Vec<(usize, usize)>;
 type Update = Vec<usize>;
 type EdgesBy = HashMap<usize, HashSet<usize>>;
 
+struct Topo {
+    before: EdgesBy,
+    after: EdgesBy,
+}
+
+impl Topo {
+    fn new_edges(update: &Update) -> EdgesBy {
+        update.iter().map(|p| (*p, HashSet::new())).collect()
+    }
+
+    fn new(edges: &Edges, update: &Update) -> Self {
+        let pageset: HashSet<&usize> = update.iter().collect();
+        let mut before = Self::new_edges(update);
+        let mut after = Self::new_edges(update);
+        for (b, a) in edges {
+            if pageset.contains(b) && pageset.contains(a) {
+                before.get_mut(a).unwrap().insert(*b);
+                after.get_mut(b).unwrap().insert(*a);
+            }
+        }
+        Self { before, after }
+    }
+
+    fn remove_page(&mut self, page: usize) {
+        let befores = self.after.get(&page).unwrap();
+        for b in befores {
+            if let Some(pages) = self.before.get_mut(&b) {
+                pages.remove(&page);
+            }
+        }
+    }
+
+    fn ordered(&mut self) -> Update {
+        let mut ret = Update::new();
+
+        while !self.before.is_empty() {
+            let (&page, _) = self.before.iter().find(|(_, v)| v.is_empty()).unwrap();
+            ret.push(page);
+            self.before.remove(&page);
+            self.remove_page(page);
+        }
+        ret
+    }
+}
+
 fn parse(fname: &str) -> (Edges, Vec<Update>) {
     let contents = read_to_string(fname).unwrap();
     let mut edges: Vec<(usize, usize)> = Vec::new();
@@ -27,48 +72,22 @@ fn parse(fname: &str) -> (Edges, Vec<Update>) {
     (edges, updates)
 }
 
-fn update_ok(update: &Update, edges: &Edges) -> bool {
-    // Build edges for just the things we care about
-    let pageset: HashSet<&usize> = update.iter().collect();
-    let mut before = EdgesBy::new();
-    let mut after = EdgesBy::new();
-    for (b, a) in edges {
-        if pageset.contains(b) && pageset.contains(a) {
-            before.entry(*a).or_insert(HashSet::new()).insert(*b);
-            after.entry(*b).or_insert(HashSet::new()).insert(*a);
-        }
-    }
-
-    for page in update {
-        if before.get(page).is_some_and(|b| !b.is_empty()) {
-            return false; // something must go before us
-        }
-        // remove edges where this page is before, they're fine now
-        if let Some(bs) = after.get(page) {
-            for b in bs {
-                if let Some(pages) = before.get_mut(&b) {
-                    pages.remove(page);
-                }
-            }
-        }
-    }
-
-    true
-}
-
-fn part1(edges: &Edges, updates: &Vec<Update>) -> usize {
-    let mut tot = 0;
-    for update in updates {
-        if update_ok(update, &edges) {
-            let mid = update.get(update.len() / 2).unwrap();
-            tot += mid;
-        }
-    }
-    tot
-}
-
 fn main() {
     let fname = args().nth(1).unwrap();
     let (edges, updates) = parse(&fname);
-    println!("Part 1: {}", part1(&edges, &updates))
+
+    let mut part1 = 0;
+    let mut part2 = 0;
+    for update in updates {
+        let mut topo = Topo::new(&edges, &update);
+        let ordered = topo.ordered();
+        let mid = ordered.get(ordered.len() / 2).unwrap();
+        if ordered == update {
+            part1 += mid;
+        } else {
+            part2 += mid;
+        }
+    }
+    println!("Part 1: {}", part1);
+    println!("Part 2: {}", part2);
 }
