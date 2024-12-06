@@ -137,14 +137,16 @@ fn part2(arena: &Arena) -> usize {
     for x1 in 1..arena.width {
       let oc = ObstacleCount::new(&arena).check(x1, y1);
       for x2 in (x1+1)..arena.width {
-        let oc2 = oc.check(x2, y1 + 1);
+        let oc2 = oc.check(x2, y1+1);
         if oc2.missing.len() > 1 {
           break;
         }
         for y2 in (y1+2)..arena.height {
-          let oc3 = oc2.check(x2 - 1, y2).check(x1-1, y2 - 1);
+          let oc3 = oc2.check(x2-1, y2).check(x1-1, y2-1);
           if oc3.complete() {
-            found.insert(oc3.missing.iter().next().unwrap().clone());
+            let missing = oc3.missing.iter().next().unwrap().clone();
+            println!("Found: {:?}", missing);
+            found.insert(missing);
           }
         }
       }
