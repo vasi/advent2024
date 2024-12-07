@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::env::args;
 use std::fs::read_to_string;
+use std::hash::Hash;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 struct Dir {
@@ -45,6 +46,15 @@ struct Guard {
   dir: Dir,
 }
 
+impl Guard {
+  fn next_pos(&self) -> Pos {
+    self.pos.next(&self.dir)
+  }
+  fn turn_right(&mut self) {
+    self.dir = self.dir.turn_right();
+  }
+}
+
 type Obstacles = HashSet<Pos>;
 
 #[derive(Debug, Clone)]
@@ -52,51 +62,75 @@ struct Arena {
   width: usize,
   height: usize,
   guard: Guard,
+  guard_orig: Pos,
   obstacles: Obstacles,
+  visited: HashSet<Guard>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum SimulationResult {
+  Repeat,
+  Exited,
 }
 
 impl Arena {
+  fn new(width: usize, height: usize, guard_pos: Pos, obstacles: Obstacles) -> Self {
+    let mut ret = Self {
+      width,
+      height,
+      guard: Guard { pos: guard_pos, dir: Dir::UP },
+      guard_orig: guard_pos,
+      obstacles,
+      visited: HashSet::new(),
+    };
+    ret.visited.insert(ret.guard);
+    ret
+  }
+
   fn contains(&self, pos: &Pos) -> bool {
     pos.x >= 0 && pos.x < self.width as i32 && pos.y >= 0 && pos.y < self.height as i32
   }
-}
 
-struct ObstacleCount<'a> {
-  arena: &'a Arena,
-  missing: HashSet<Pos>,
-  guard: bool,
-}
+  fn simulate(&mut self) -> SimulationResult {
+    loop {
+      while self.obstacles.contains(&self.guard.next_pos()) {
+        self.guard.turn_right();
+      }
+      self.guard.pos = self.guard.next_pos();
 
-impl <'a> ObstacleCount<'a> {
-  fn new(arena: &'a Arena) -> Self {
-    Self { arena, missing: HashSet::new(), guard: false }
-  }
-
-  fn check(&self, x: usize, y: usize) -> Self {
-    let mut guard = self.guard;
-    let mut missing = self.missing.clone();
-    let pos = Pos::new(x, y);
-    if self.arena.guard.pos == pos {
-      guard = true;
+      if self.visited.contains(&self.guard) {
+        return SimulationResult::Repeat;
+      } else if !self.contains(&self.guard.pos) {
+        return SimulationResult::Exited;
+      }
+      self.visited.insert(self.guard);
     }
-    if !self.arena.obstacles.contains(&pos) {
-      missing.insert(pos);
-    }
-    Self { arena: self.arena, missing, guard}
   }
 
-  fn complete(&self) -> bool {
-    self.missing.len() == 1 && !self.guard
+  fn with_obstacle(&self, pos: &Pos) -> Self {
+    let mut arena = Self {
+      width: self.width,
+      height: self.height,
+      guard: Guard { pos: self.guard_orig, dir: Dir::UP },
+      guard_orig: self.guard_orig,
+      obstacles: self.obstacles.clone(),
+      visited: HashSet::new(),
+    };
+    arena.obstacles.insert(*pos);
+    arena
+  }
+
+  fn visited_positions(&self) -> HashSet<Pos> {
+    self.visited.iter().map(|g| g.pos).collect()
   }
 }
-
 
 fn parse(fname: &str) -> Arena {
   let contents = read_to_string(fname).unwrap();
 
   let mut width = 0;
   let mut height = 0;
-  let mut guard = Guard { pos: Pos::empty(), dir: Dir::UP };
+  let mut guard_pos = Pos::empty();
   let mut obstacles = Obstacles::new();
 
   for (y, line) in contents.lines().enumerate() {
@@ -105,60 +139,30 @@ fn parse(fname: &str) -> Arena {
       if c == '#' {
         obstacles.insert(Pos::new(x, y));
       } else if c == '^' {
-        guard.pos = Pos::new(x, y);
+        guard_pos = Pos::new(x, y);
       }
     }
     height = y + 1;
-  }
-  Arena { width, height, guard, obstacles }
-}
-
-fn part1(mut arena: Arena) -> usize {
-  let mut visited = HashSet::new();
-  visited.insert(arena.guard.pos);
-
-  loop {
-    let next_pos = arena.guard.pos.next(&arena.guard.dir);
-    if arena.obstacles.contains(&next_pos) {
-      arena.guard.dir = arena.guard.dir.turn_right();
-    } else if arena.contains(&next_pos) {
-      arena.guard.pos = next_pos;
-      visited.insert(next_pos);
-    } else {
-      break;
     }
-  }
-  visited.len()
-}
-
-fn part2(arena: &Arena) -> usize {
-  let mut found = HashSet::new();
-  for y1 in 0..(arena.height-1) {
-    for x1 in 1..arena.width {
-      let oc = ObstacleCount::new(&arena).check(x1, y1);
-      for x2 in (x1+1)..arena.width {
-        let oc2 = oc.check(x2, y1+1);
-        if oc2.missing.len() > 1 {
-          break;
-        }
-        for y2 in (y1+2)..arena.height {
-          let oc3 = oc2.check(x2-1, y2).check(x1-1, y2-1);
-          if oc3.complete() {
-            let missing = oc3.missing.iter().next().unwrap().clone();
-            println!("Found: {:?}", missing);
-            found.insert(missing);
-          }
-        }
-      }
-    }
-  }
-
-  found.len()
+  Arena::new(width, height, guard_pos, obstacles)
 }
 
 fn main() {
   let fname = args().nth(1).unwrap();
-  let arena = parse(&fname);
-  println!("Part 1: {}", part1(arena.clone()));
-  println!("Part 2: {}", part2(&arena));
+
+  let mut arena = parse(&fname);
+  let orig_pos = arena.guard.pos.clone();
+  arena.simulate();
+  let visited = arena.visited_positions();
+  println!("Part 1: {}", visited.len());
+
+  let part2 = visited.iter().filter(|p| {
+    if **p == orig_pos {
+      false
+    } else {
+      let mut arena2 = arena.with_obstacle(p);
+      arena2.simulate() == SimulationResult::Repeat
+    }
+  }).count();
+  println!("Part 2: {}", part2);
 }
