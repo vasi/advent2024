@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::env::args;
 use std::fs::read_to_string;
 
@@ -13,26 +13,12 @@ impl Pos {
     fn new(x: i64, y: i64) -> Self {
         Self { x, y }
     }
-
-    // The antinode closer to self
-    fn antinode(&self, other: &Self) -> Self {
-        Self::new(self.x - (other.x - self.x), self.y - (other.y - self.y))
-    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 struct LabeledPos {
     pos: Pos,
     label: char,
-}
-
-impl LabeledPos {
-    fn antinode(&self, other: &Self) -> Self {
-        Self {
-            pos: self.pos.antinode(&other.pos),
-            label: self.label,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -72,30 +58,74 @@ impl City {
         pos.x >= 0 && pos.x < (self.width as i64) && pos.y >= 0 && pos.y < (self.height as i64)
     }
 
-    fn antinodes(&self) -> HashSet<LabeledPos> {
+    fn antinodes_pair<T: Iterator<Item = i64> + Clone>(
+        &self,
+        range: T,
+        near: &LabeledPos,
+        far: &LabeledPos,
+    ) -> HashSet<LabeledPos> {
+        let dx = near.pos.x - far.pos.x;
+        let dy = near.pos.y - far.pos.y;
         let mut ret = HashSet::new();
-        let mut add_antinode = |an: LabeledPos| {
-            if self.in_bounds(&an.pos) {
-                ret.insert(an);
+
+        for m in range {
+            let pos = Pos::new(near.pos.x + m * dx, near.pos.y + m * dy);
+            if !self.in_bounds(&pos) {
+                break;
             }
-        };
+            ret.insert(LabeledPos {
+                pos,
+                label: near.label,
+            });
+        }
+        ret
+    }
+
+    fn antinodes_all<T: Iterator<Item = i64> + Clone>(&self, range: T) -> HashSet<LabeledPos> {
+        let mut ret = HashSet::new();
         let by_freq = self.antennas.iter().into_group_map_by(|a| a.label);
         for aas in by_freq.values() {
             for (a1, a2) in aas.iter().tuple_combinations() {
-                add_antinode(a1.antinode(*a2));
-                add_antinode(a2.antinode(*a1));
+                ret.extend(self.antinodes_pair(range.clone(), a1, a2));
+                ret.extend(self.antinodes_pair(range.clone(), a2, a1));
             }
         }
         ret
     }
 
-    fn part1(&self) -> usize {
-        self.antinodes().iter().unique_by(|a| a.pos).count()
+    fn solve<T: Iterator<Item = i64> + Clone>(&self, range: T) -> usize {
+        self.antinodes_all(range)
+            .iter()
+            .unique_by(|a| a.pos)
+            .count()
+    }
+
+    fn print_solution<T: Iterator<Item = i64> + Clone>(&self, range: T) {
+        let mut points = HashMap::new();
+        for a in self.antinodes_all(range) {
+            points.insert(a.pos, '#');
+        }
+        for a in &self.antennas {
+            points.insert(a.pos, a.label);
+        }
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let p = Pos::new(x as i64, y as i64);
+                let c = match points.get(&p) {
+                    None => '.',
+                    Some(l) => *l,
+                };
+                print!("{}", c);
+            }
+            print!("\n");
+        }
     }
 }
 
 fn main() {
     let fname = args().nth(1).unwrap();
     let city = City::parse(&fname);
-    println!("Part 1: {}", city.part1());
+    println!("Part 1: {}", city.solve(1..2));
+    println!("Part 2: {}", city.solve(0_i64..));
+    city.print_solution(1..2);
 }
