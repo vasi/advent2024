@@ -68,6 +68,26 @@ fn reachable_tops(topo: &Topo, trailhead: &Pos) -> HashSet<Pos> {
     tops
 }
 
+fn rating(topo: &Topo, trailhead: &Pos) -> i64 {
+    let mut cur = HashMap::new();
+    cur.insert(*trailhead, 1);
+    let mut next = HashMap::new();
+
+    for level in 0..9 {
+        for (p, ways) in cur.iter() {
+            for adj in p.adjacent() {
+                if topo.get(&adj) == Some(&(level + 1)) {
+                    *next.entry(adj).or_insert(0) += ways;
+                }
+            }
+        }
+        cur.clone_from(&next);
+        next.clear();
+    }
+
+    cur.values().sum()
+}
+
 fn part1(topo: &Topo) -> i64 {
     trailheads(topo)
         .iter()
@@ -75,8 +95,13 @@ fn part1(topo: &Topo) -> i64 {
         .sum()
 }
 
+fn part2(topo: &Topo) -> i64 {
+    trailheads(topo).iter().map(|th| rating(topo, th)).sum()
+}
+
 fn main() {
     let fname = args().nth(1).unwrap();
     let topo = parse(&fname);
     println!("Part 1: {}", part1(&topo));
+    println!("Part 2: {}", part2(&topo));
 }
