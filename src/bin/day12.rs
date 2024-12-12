@@ -13,14 +13,28 @@ impl Pos {
         Self { x, y }
     }
 
-    fn adjacent(&self) -> Vec<Pos> {
-        vec![
-            Pos::new(self.x, self.y - 1),
-            Pos::new(self.x, self.y + 1),
-            Pos::new(self.x - 1, self.y),
-            Pos::new(self.x + 1, self.y),
-        ]
+    fn go(&self, dir: &Dir) -> Self {
+        Self::new(self.x + dir.dx, self.y + dir.dy)
     }
+
+    fn adjacent(&self) -> Vec<Pos> {
+        Dir::ALL.iter().map(|d| self.go(&d)).collect()
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+struct Dir {
+    dx: i64,
+    dy: i64,
+}
+
+impl Dir {
+    const ALL: [Self; 4] = [
+        Self { dx: 1, dy: 0 },
+        Self { dx: 0, dy: 1 },
+        Self { dx: -1, dy: 0 },
+        Self { dx: 0, dy: -1 },
+    ];
 }
 
 type Garden = HashMap<Pos, char>;
@@ -37,34 +51,44 @@ fn parse(fname: &str) -> Garden {
     garden
 }
 
-fn plot(garden: &Garden, avail: &BTreeSet<Pos>, start: &Pos) -> Plot {
-    let c = garden.get(start);
-    let mut plot = Plot::new();
-    plot.insert(*start);
+fn region<GroupFn: Fn(&Pos, &Pos) -> bool>(
+    avail: &BTreeSet<Pos>,
+    start: &Pos,
+    gf: &GroupFn,
+) -> BTreeSet<Pos> {
+    let mut result = BTreeSet::new();
+    result.insert(*start);
     let mut todo = Vec::new();
     todo.push(*start);
 
     while let Some(p) = todo.pop() {
         for adj in p.adjacent() {
-            if avail.contains(&adj) && !plot.contains(&adj) && garden.get(&adj) == c {
-                plot.insert(adj);
+            if avail.contains(&adj) && !result.contains(&adj) && gf(start, &adj) {
+                result.insert(adj);
                 todo.push(adj);
             }
         }
     }
-    plot
+    result
+}
+
+fn regions<GroupFn: Fn(&Pos, &Pos) -> bool>(
+    mut avail: BTreeSet<Pos>,
+    gf: &GroupFn,
+) -> Vec<BTreeSet<Pos>> {
+    let mut regions = Vec::new();
+    while !avail.is_empty() {
+        let pos = avail.iter().next().unwrap();
+        let plot = region(&avail, pos, gf);
+        avail.retain(|p| !plot.contains(p));
+        regions.push(plot);
+    }
+    regions
 }
 
 fn plots(garden: &Garden) -> Vec<Plot> {
-    let mut plots = Vec::new();
-    let mut avail: BTreeSet<Pos> = garden.keys().map(|k| *k).collect();
-    while !avail.is_empty() {
-        let pos = avail.iter().next().unwrap();
-        let plot = plot(garden, &avail, pos);
-        avail.retain(|p| !plot.contains(p));
-        plots.push(plot);
-    }
-    plots
+    let avail: BTreeSet<Pos> = garden.keys().map(|k| *k).collect();
+    regions(avail, &|a, b| garden.get(a) == garden.get(b))
 }
 
 fn perimeter(plot: &Plot) -> i64 {
@@ -88,8 +112,35 @@ fn part1(garden: &Garden) -> i64 {
     plots.iter().map(|p| cost(p)).sum()
 }
 
+fn sides(plot: &Plot) -> i64 {
+    let mut by_dir: HashMap<Dir, BTreeSet<Pos>> =
+        Dir::ALL.iter().map(|d| (*d, BTreeSet::new())).collect();
+    for start in plot {
+        for dir in Dir::ALL {
+            let target = start.go(&dir);
+            if !plot.contains(&target) {
+                by_dir.get_mut(&dir).unwrap().insert(target);
+            }
+        }
+    }
+    by_dir
+        .values()
+        .map(|dp| regions(dp.clone(), &|_, _| true).len() as i64)
+        .sum()
+}
+
+fn cost2(plot: &Plot) -> i64 {
+    (plot.len() as i64) * sides(plot)
+}
+
+fn part2(garden: &Garden) -> i64 {
+    let plots = plots(garden);
+    plots.iter().map(|p| cost2(p)).sum()
+}
+
 fn main() {
     let fname = args().nth(1).unwrap();
     let garden = parse(&fname);
     println!("Part 1: {}", part1(&garden));
+    println!("Part 1: {}", part2(&garden));
 }
