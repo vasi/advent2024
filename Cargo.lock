@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "itertools",
+ "rational",
  "regex",
 ]
 
@@ -46,6 +47,12 @@ name = "memchr"
 version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
+
+[[package]]
+name = "rational"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "117b580236885b73c6eaf40e38c9629153f70200ac28ae35347a2cb750ce9442"
 
 [[package]]
 name = "regex"

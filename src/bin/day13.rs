@@ -1,3 +1,4 @@
+use rational::{self, Rational};
 use regex::Regex;
 use std::env::args;
 use std::fs::read_to_string;
@@ -34,28 +35,35 @@ struct Machine {
 }
 
 impl Machine {
-    fn is_solution(&self, a: i64, b: i64) -> bool {
-        self.a.x * a + self.b.x * b == self.prize.x && self.a.y * a + self.b.y * b == self.prize.y
-    }
+    fn solution(&self) -> Option<Solution> {
+        let ax = Rational::integer(self.a.x as i128);
+        let ay = Rational::integer(self.a.y as i128);
+        let bx = Rational::integer(self.b.x as i128);
+        let by = Rational::integer(self.b.y as i128);
+        let px = Rational::integer(self.prize.x as i128);
+        let py = Rational::integer(self.prize.y as i128);
 
-    fn solutions(&self) -> Vec<Solution> {
-        let mut solutions = Vec::new();
-        for a in 0..100 {
-            for b in 0..100 {
-                if self.is_solution(a, b) {
-                    solutions.push(Solution { a, b });
-                }
-            }
+        let nb = (py * ax - px * ay) / (by * ax - bx * ay);
+        let na = (px - bx * nb) / ax;
+        if nb.is_integer() && na.is_integer() {
+            Some(Solution {
+                a: na.numerator() as i64,
+                b: nb.numerator() as i64,
+            })
+        } else {
+            None
         }
-        solutions
     }
 
-    fn solve1(&self) -> i64 {
-        self.solutions()
-            .iter()
-            .map(|s| s.score())
-            .min()
-            .unwrap_or(0)
+    fn score(&self) -> i64 {
+        self.solution().map(|s| s.score()).unwrap_or(0)
+    }
+
+    fn part2(&self) -> Self {
+        let mut r = self.clone();
+        r.prize.x += 10000000000000;
+        r.prize.y += 10000000000000;
+        r
     }
 }
 
@@ -76,11 +84,16 @@ fn parse(fname: &str) -> Vec<Machine> {
 }
 
 fn part1(machines: &Vec<Machine>) -> i64 {
-    machines.iter().map(|m| m.solve1()).sum()
+    machines.iter().map(|m| m.score()).sum()
+}
+
+fn part2(machines: &Vec<Machine>) -> i64 {
+    machines.iter().map(|m| m.part2().score()).sum()
 }
 
 fn main() {
     let fname = args().nth(1).unwrap();
     let machines = parse(&fname);
     println!("Part1: {}", part1(&machines));
+    println!("Part2: {}", part2(&machines));
 }
