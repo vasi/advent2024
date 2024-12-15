@@ -107,6 +107,7 @@ impl Room {
         img.save(fname).unwrap();
     }
 
+    #[allow(dead_code)]
     fn print_pngs(&mut self) {
         for i in 0..99999 {
             let fname = format!("img/{:0>5}.png", &i);
