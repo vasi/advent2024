@@ -24,6 +24,27 @@ impl Dir {
             _ => panic!("Invalid direction: {}", c),
         }
     }
+
+    fn is_vertical(&self) -> bool {
+        self.dx == 0
+    }
+}
+
+impl Display for Dir {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let d = *self;
+        write!(
+            f,
+            "{}",
+            match d {
+                Dir::LEFT => "left",
+                Dir::RIGHT => "right",
+                Dir::UP => "up",
+                Dir::DOWN => "down",
+                _ => unreachable!(),
+            }
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -47,16 +68,22 @@ enum Tile {
     Empty,
     Bot,
     Box,
+    BoxLeft,
+    BoxRight,
     Wall,
 }
 
 impl Tile {
-    fn parse(c: char) -> Self {
-        match c {
-            '.' => Self::Empty,
-            '@' => Self::Bot,
-            'O' => Self::Box,
-            '#' => Self::Wall,
+    fn parse(c: char, wide: i64) -> Vec<Self> {
+        match (c, wide) {
+            ('.', 1) => vec![Self::Empty],
+            ('@', 1) => vec![Self::Bot],
+            ('O', 1) => vec![Self::Box],
+            ('#', 1) => vec![Self::Wall],
+            ('.', 2) => vec![Self::Empty, Self::Empty],
+            ('@', 2) => vec![Self::Bot, Self::Empty],
+            ('O', 2) => vec![Self::BoxLeft, Self::BoxRight],
+            ('#', 2) => vec![Self::Wall, Self::Wall],
             _ => panic!("Invalid tile: {}", c),
         }
     }
@@ -72,7 +99,7 @@ struct Warehouse {
 }
 
 impl Warehouse {
-    fn parse(fname: &str) -> Self {
+    fn parse(fname: &str, wide: i64) -> Self {
         let mut width = 0;
         let mut height = 0;
         let mut obstacles = HashMap::new();
@@ -87,18 +114,20 @@ impl Warehouse {
             } else if line.is_empty() {
                 done_map = true;
             } else {
-                width = line.len() as i64;
                 height = (y + 1) as i64;
-                for (x, c) in line.chars().enumerate() {
-                    match Tile::parse(c) {
-                        Tile::Bot => bot = Pos::new(x as i64, y as i64),
-                        Tile::Box => {
-                            obstacles.insert(Pos::new(x as i64, y as i64), Tile::Box);
+                let mut x = 0;
+                for c in line.chars() {
+                    let tiles = Tile::parse(c, wide);
+                    for t in tiles {
+                        match t {
+                            Tile::Bot => bot = Pos::new(x as i64, y as i64),
+                            Tile::Empty => (),
+                            _ => {
+                                obstacles.insert(Pos::new(x as i64, y as i64), t);
+                            }
                         }
-                        Tile::Wall => {
-                            obstacles.insert(Pos::new(x as i64, y as i64), Tile::Wall);
-                        }
-                        Tile::Empty => (),
+                        x += 1;
+                        width = x;
                     }
                 }
             }
@@ -112,42 +141,66 @@ impl Warehouse {
         }
     }
 
-    fn move_one(&mut self, dir: &Dir) {
-        let bot_pos = self.bot;
-        let bot_dest = bot_pos.go(&dir);
-        let mut check = bot_dest;
-        loop {
-            match self.obstacles.get(&check) {
-                Some(Tile::Wall) => return,
-                Some(Tile::Box) => check = check.go(&dir),
-                None => {
-                    if check != bot_dest {
-                        self.obstacles.insert(check, Tile::Box);
-                        self.obstacles.remove(&bot_dest);
-                    }
-                    self.bot = bot_dest;
-                    return;
-                }
-                _ => unreachable!(),
-            }
+    fn need_move(&self, pos: &Pos, dir: &Dir, t: Tile) -> Vec<Pos> {
+        match (t, dir.is_vertical()) {
+            (Tile::Box, _) | (_, false) => vec![*pos],
+            (Tile::BoxLeft, true) => vec![*pos, pos.go(&Dir::RIGHT)],
+            (Tile::BoxRight, true) => vec![*pos, pos.go(&Dir::LEFT)],
+            _ => unreachable!(),
         }
+    }
+
+    fn move_one(&mut self, dir: &Dir) {
+        let mut to_move = Vec::new();
+        let mut check = Vec::new();
+        let bot_dest = self.bot.go(dir);
+        check.push(bot_dest);
+
+        loop {
+            let mut new_check = Vec::new();
+            for pos in check.iter() {
+                if let Some(t) = self.obstacles.get(pos) {
+                    if t == &Tile::Wall {
+                        return;
+                    }
+                    for np in self.need_move(pos, dir, *t) {
+                        to_move.push((np, *self.obstacles.get(&np).unwrap()));
+                        new_check.push(np.go(dir));
+                    }
+                }
+            }
+            if new_check.is_empty() {
+                break;
+            }
+            check = new_check;
+        }
+
+        for (pos, _) in to_move.iter() {
+            self.obstacles.remove(&pos);
+        }
+        for (pos, t) in to_move.iter() {
+            self.obstacles.insert(pos.go(dir), *t);
+        }
+        self.bot = bot_dest;
     }
 
     fn move_all(&mut self) {
         for dir in self.moves.clone().iter() {
+            // println!("{}", dir);
             self.move_one(&dir);
+            // print!("{}", self);
         }
     }
 
     fn score(&self) -> i64 {
         self.obstacles
             .iter()
-            .filter(|(_, &t)| t == Tile::Box)
+            .filter(|(_, &t)| t == Tile::Box || t == Tile::BoxLeft)
             .map(|(p, _)| p.x + 100 * p.y)
             .sum()
     }
 
-    fn part1(&mut self) -> i64 {
+    fn result(&mut self) -> i64 {
         self.move_all();
         self.score()
     }
@@ -164,6 +217,8 @@ impl Display for Warehouse {
                     let c = match self.obstacles.get(&pos) {
                         None => '.',
                         Some(Tile::Box) => 'O',
+                        Some(Tile::BoxLeft) => '[',
+                        Some(Tile::BoxRight) => ']',
                         Some(Tile::Wall) => '#',
                         _ => unreachable!(),
                     };
@@ -178,6 +233,10 @@ impl Display for Warehouse {
 
 fn main() {
     let fname = args().nth(1).unwrap();
-    let mut warehouse = Warehouse::parse(&fname);
-    println!("{}", warehouse.part1());
+
+    let mut warehouse = Warehouse::parse(&fname, 1);
+    println!("{}", warehouse.result());
+
+    let mut warehouse = Warehouse::parse(&fname, 2);
+    println!("{}", warehouse.result());
 }
