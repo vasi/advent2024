@@ -1,4 +1,4 @@
-use pathfinding::prelude::astar;
+use pathfinding::prelude::astar_bag_collect;
 use std::collections::HashSet;
 use std::env::args;
 use std::fs::read_to_string;
@@ -78,6 +78,8 @@ impl Pos {
     }
 }
 
+type Visited = HashSet<Coord2>;
+
 struct Maze {
     start: Coord2,
     end: Coord2,
@@ -117,20 +119,24 @@ impl Maze {
             .collect()
     }
 
-    fn solve(&self) -> Cost {
+    fn solve(&self) -> (Cost, Visited) {
         let start = Pos::new(self.start, Dir::EAST);
-        let result = astar(
+        let (paths, cost) = astar_bag_collect(
             &start,
             |p| self.successors(p),
             |p| self.end.manhattan(&p.coord),
             |p| p.coord == self.end,
-        );
-        result.unwrap().1
+        )
+        .unwrap();
+        let visited: HashSet<Coord2> = paths.iter().flat_map(|p| p).map(|p| p.coord).collect();
+        (cost, visited)
     }
 }
 
 fn main() {
     let fname = args().nth(1).unwrap();
     let maze = Maze::parse(&fname);
-    println!("Part 1: {}", maze.solve());
+    let (cost, visited) = maze.solve();
+    println!("Part 1: {}", cost);
+    println!("Part 2: {}", visited.len());
 }
