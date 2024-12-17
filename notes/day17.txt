@@ -1,0 +1,92 @@
+# Sample
+
+Register A: X  # Want: 2024
+Register B: 0
+Register C: 0
+Program: 0,3,5,4,3,0
+
+## Disassembly
+
+0: adv 3
+2: out A
+4: jnz 0
+
+## Interpretation
+
+A = X
+while true:
+  A /= 8
+  output(A % 8)
+  if A != 0:
+    break
+
+Meaning: Reversed bytes of X/8
+
+# Input
+
+Register A: X
+Register B: 0
+Register C: 0
+
+Program: 2,4,1,4,7,5,4,1,1,4,5,5,0,3,3,0
+
+## Disassembly
+
+0: bst A
+2: bxl 4
+4: cdv B
+6: bxc
+8: bxl 4
+10: out B
+12: adv 3
+14: jnz 0
+
+## Interpretation
+
+A = X
+while true:
+  B = A & 0x7
+  B = B ^ 4
+  C = A / 2**B
+  B = B ^ C
+  B = B ^ 4
+  output(B & 0x7)
+  A = A / 8
+  break if A != 0
+
+a = X
+for b in a.bytes.reverse:
+  shift = b ^ 4
+  c = (a >> shift) & 0x7
+  out = b ^ c
+  output(out)
+  a /= 8
+
+## Can we work forwards in program?
+
+Program is 16 bytes, so we need 16 octal digits of A
+
+Last output is 0:
+  At this stage, b = a
+  Try different values of a/b:
+    | b | shift | c | out |
+    | 0 | 4     | 0 | 0   |
+    | 1 | 5     | 0 | 1   |
+    | 2 | 6     | 0 | 2   |
+    | 3 | 7     | 0 | 3   |
+    | 4 | 0     | 4 | 0   |
+    | 5 | 1     | 2 | 7   |
+    | 6 | 2     | 1 | 7   |
+    | 7 | 3     | 0 | 7   |
+  Must be 0 or 4!
+  Obviously 0 is not a valid first-digit
+
+What if first is 4, could second be 3?
+  target = A[14] = 3
+  target = A[14] = 3
+  prev_a = 4
+  b = 3
+  a = 43
+  shift = b ^ 4 = 7
+  c = (a >> shift) & 0x7 = 0
+  out = 3, so it should work!
