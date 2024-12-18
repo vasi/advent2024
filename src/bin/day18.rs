@@ -81,19 +81,32 @@ impl Memory {
             .collect()
     }
 
-    fn part1(&self) -> i64 {
+    fn cost(&self, obstacles: &HashSet<&Coord2>) -> Option<i64> {
         let start = Coord2::new(0, 0);
         let target = Coord2::new(self.width - 1, self.height - 1);
-        let obstacles: HashSet<_> = self.bytes.iter().take(self.take).collect();
-
-        let (_, cost) = astar(
+        let path = astar(
             &start,
             |c| self.successors(&obstacles, c),
             |c| target.manhattan(c),
             |c| *c == target,
-        )
-        .unwrap();
-        cost
+        );
+        path.map(|p| p.1)
+    }
+
+    fn part1(&self) -> i64 {
+        let obstacles: HashSet<_> = self.bytes.iter().take(self.take).collect();
+        self.cost(&obstacles).unwrap()
+    }
+
+    fn part2(&self) -> String {
+        let mut obstacles = HashSet::new();
+        for byte in &self.bytes {
+            obstacles.insert(byte);
+            if self.cost(&obstacles).is_none() {
+                return format!("{},{}", byte.x, byte.y);
+            }
+        }
+        unreachable!()
     }
 }
 
@@ -101,4 +114,5 @@ fn main() {
     let fname = args().nth(1).unwrap();
     let memory = Memory::parse(&fname);
     println!("Part 1: {}", memory.part1());
+    println!("Part 2: {}", memory.part2());
 }
