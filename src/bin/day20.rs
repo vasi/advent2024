@@ -22,6 +22,10 @@ impl Coord2 {
             Self::new(self.x + 1, self.y),
         ]
     }
+
+    fn manhattan(&self, other: &Coord2) -> i64 {
+        (self.x - other.x).abs() + (self.y - other.y).abs()
+    }
 }
 
 type Path = HashMap<Coord2, i64>;
@@ -38,7 +42,7 @@ impl Cheat {
         let d1 = *path.get(&p1).unwrap();
         let d2 = *path.get(&p2).unwrap();
         let (&start, &end) = if d1 < d2 { (p1, p2) } else { (p2, p1) };
-        let saved = (d1 - d2).abs() - 2;
+        let saved = (d1 - d2).abs() - p1.manhattan(p2);
         if saved <= 0 {
             None
         } else {
@@ -98,7 +102,7 @@ impl Maze {
         'outer: while pos != self.end {
             for adj in pos.adjacent() {
                 if !self.walls.contains(&adj) && !path.contains_key(&adj) {
-                    path.insert(adj, (path.len() as i64) + 1);
+                    path.insert(adj, path.len() as i64);
                     pos = adj;
                     continue 'outer;
                 }
@@ -133,6 +137,25 @@ impl Maze {
         let cheats = self.find_cheats(&path);
         cheats.iter().filter(|ch| ch.saved >= 100).count()
     }
+
+    fn part2(&self, min_dist: i64) -> usize {
+        let mut cheats = HashSet::new();
+        let path = self.path();
+
+        for p1 in path.keys() {
+            for p2 in path.keys() {
+                if p1.manhattan(p2) <= 20 {
+                    let cheat = Cheat::new(&path, p1, p2);
+                    if let Some(ch) = cheat {
+                        if ch.saved >= min_dist {
+                            cheats.insert(ch);
+                        }
+                    }
+                }
+            }
+        }
+        cheats.len()
+    }
 }
 
 #[allow(dead_code)]
@@ -148,4 +171,5 @@ fn main() {
     let fname = args().nth(1).unwrap();
     let maze = Maze::parse(&fname);
     println!("Part 1: {}", maze.part1());
+    println!("Part 2: {}", maze.part2(100));
 }
