@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::env::args;
 use std::fs::read_to_string;
@@ -53,25 +54,25 @@ impl Cheat {
 
 #[derive(Debug, Clone)]
 struct Maze {
-    width: i64,
-    height: i64,
     start: Coord2,
     end: Coord2,
     walls: HashSet<Coord2>,
+    min_saved: i64,
 }
 
 impl Maze {
     fn parse(fname: &str) -> Self {
-        let mut width = 0;
-        let mut height = 0;
         let mut start = Coord2::new(0, 0);
         let mut end = Coord2::new(0, 0);
         let mut walls = HashSet::new();
+        let min_save_re = Regex::new(r"minsave: (\d+)").unwrap();
 
         let contents = read_to_string(fname).unwrap();
-        for (y, line) in contents.lines().enumerate() {
-            height = (y as i64) + 1;
-            width = line.len() as i64;
+        let mut lines = contents.lines();
+        let caps = min_save_re.captures(lines.next().unwrap()).unwrap();
+        let min_saved = caps[1].parse().unwrap();
+
+        for (y, line) in lines.enumerate() {
             for (x, c) in line.chars().enumerate() {
                 let pos = Coord2::new(x as i64, y as i64);
                 match c {
@@ -87,11 +88,10 @@ impl Maze {
         }
 
         Self {
-            width,
-            height,
             start,
             end,
             walls,
+            min_saved,
         }
     }
 
@@ -112,42 +112,16 @@ impl Maze {
         path
     }
 
-    // Returned cheats are ordered as (start, end)
-    fn find_cheats(&self, path: &Path) -> HashSet<Cheat> {
-        let mut cheats = HashSet::new();
-        for wall in &self.walls {
-            for p1 in wall.adjacent() {
-                if !path.contains_key(&p1) {
-                    continue;
-                }
-                for p2 in wall.adjacent() {
-                    if p1 == p2 || !path.contains_key(&p2) {
-                        continue;
-                    }
-                    cheats.extend(Cheat::new(path, &p1, &p2));
-                }
-            }
-        }
-
-        cheats
-    }
-
-    fn part1(&self) -> usize {
-        let path = self.path();
-        let cheats = self.find_cheats(&path);
-        cheats.iter().filter(|ch| ch.saved >= 100).count()
-    }
-
-    fn part2(&self, min_dist: i64) -> usize {
+    fn count_cheats(&self, max_dist: i64) -> usize {
         let mut cheats = HashSet::new();
         let path = self.path();
 
         for p1 in path.keys() {
             for p2 in path.keys() {
-                if p1.manhattan(p2) <= 20 {
+                if p1.manhattan(p2) <= max_dist {
                     let cheat = Cheat::new(&path, p1, p2);
                     if let Some(ch) = cheat {
-                        if ch.saved >= min_dist {
+                        if ch.saved >= self.min_saved {
                             cheats.insert(ch);
                         }
                     }
@@ -170,6 +144,6 @@ fn order_path(path: &Path) -> Vec<Coord2> {
 fn main() {
     let fname = args().nth(1).unwrap();
     let maze = Maze::parse(&fname);
-    println!("Part 1: {}", maze.part1());
-    println!("Part 2: {}", maze.part2(100));
+    println!("Part 1: {}", maze.count_cheats(2));
+    println!("Part 2: {}", maze.count_cheats(20));
 }
