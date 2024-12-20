@@ -24,6 +24,29 @@ impl Coord2 {
     }
 }
 
+type Path = HashMap<Coord2, i64>;
+
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, PartialEq, Eq, Hash)]
+struct Cheat {
+    start: Coord2,
+    end: Coord2,
+    saved: i64,
+}
+
+impl Cheat {
+    fn new(path: &Path, p1: &Coord2, p2: &Coord2) -> Option<Self> {
+        let d1 = *path.get(&p1).unwrap();
+        let d2 = *path.get(&p2).unwrap();
+        let (&start, &end) = if d1 < d2 { (p1, p2) } else { (p2, p1) };
+        let saved = (d1 - d2).abs() - 2;
+        if saved <= 0 {
+            None
+        } else {
+            Some(Self { start, end, saved })
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Maze {
     width: i64,
@@ -68,8 +91,8 @@ impl Maze {
         }
     }
 
-    fn path(&self) -> HashMap<Coord2, i64> {
-        let mut path = HashMap::new();
+    fn path(&self) -> Path {
+        let mut path = Path::new();
         let mut pos = self.start;
         path.insert(pos, 0);
         'outer: while pos != self.end {
@@ -84,9 +107,36 @@ impl Maze {
         }
         path
     }
+
+    // Returned cheats are ordered as (start, end)
+    fn find_cheats(&self, path: &Path) -> HashSet<Cheat> {
+        let mut cheats = HashSet::new();
+        for wall in &self.walls {
+            for p1 in wall.adjacent() {
+                if !path.contains_key(&p1) {
+                    continue;
+                }
+                for p2 in wall.adjacent() {
+                    if p1 == p2 || !path.contains_key(&p2) {
+                        continue;
+                    }
+                    cheats.extend(Cheat::new(path, &p1, &p2));
+                }
+            }
+        }
+
+        cheats
+    }
+
+    fn part1(&self) -> usize {
+        let path = self.path();
+        let cheats = self.find_cheats(&path);
+        cheats.iter().filter(|ch| ch.saved >= 100).count()
+    }
 }
 
-fn order_path(path: &HashMap<Coord2, i64>) -> Vec<Coord2> {
+#[allow(dead_code)]
+fn order_path(path: &Path) -> Vec<Coord2> {
     path.iter()
         .sorted_by_key(|(_, &v)| v)
         .map(|(k, _)| k)
@@ -97,12 +147,5 @@ fn order_path(path: &HashMap<Coord2, i64>) -> Vec<Coord2> {
 fn main() {
     let fname = args().nth(1).unwrap();
     let maze = Maze::parse(&fname);
-    let path = maze.path();
-    let ordered_path = order_path(&path);
-    assert_eq!(
-        maze.width * maze.height,
-        (maze.walls.len() + ordered_path.len()) as i64,
-    );
-
-    println!("{:?}", &ordered_path);
+    println!("Part 1: {}", maze.part1());
 }
