@@ -1,6 +1,14 @@
 use itertools::Itertools;
 use pathfinding::prelude::dijkstra_all;
+use regex::Regex;
 use std::collections::HashMap;
+use std::env::args;
+use std::fs::read_to_string;
+
+fn parse(fname: &str) -> Vec<String> {
+    let contents = read_to_string(fname).unwrap();
+    contents.lines().map(|s| s.to_owned()).collect()
+}
 
 type Dir = char;
 type Loc = char;
@@ -46,7 +54,7 @@ fn moves_dpad() -> Moves {
         ('^', vec![('v', 'v'), ('>', 'A')]),
         ('A', vec![('v', '>')]),
         ('<', vec![/*       */ ('>', 'v')]),
-        ('V', vec![/*       */ ('>', '>')]),
+        ('v', vec![/*       */ ('>', '>')]),
     ]))
 }
 
@@ -108,13 +116,56 @@ fn seq_cost(costs: &AllCosts, seq: &Vec<Loc>) -> usize {
     tot
 }
 
-fn main() {
+#[allow(dead_code)]
+fn print_costs(costs: &AllCosts) {
+    let ks = costs.keys().sorted().collect_vec();
+    print!("    ");
+    for dest in &ks {
+        print!("{:>4}", dest);
+    }
+    println!();
+    for start in &ks {
+        print!("{:>4}", start);
+        for dest in &ks {
+            print!("{:>4}", costs.get(start).unwrap().get(dest).unwrap());
+        }
+        println!();
+    }
+    println!()
+}
+
+fn leveln_costs(n: usize) -> AllCosts {
     let num_moves = moves_numeric();
     let dpad_moves = moves_dpad();
 
     let mut costs = human_costs(&dpad_moves);
+    for _ in 0..(n - 2) {
+        costs = all_costs(&dpad_moves, &costs);
+    }
     costs = all_costs(&num_moves, &costs);
+    costs
+}
 
-    let seq = "029A".chars().collect();
-    println!("{}", seq_cost(&costs, &seq));
+fn numeric_part(code: &str) -> usize {
+    let non_digits = Regex::new(r"\D").unwrap();
+    non_digits.replace_all(code, "").parse().unwrap()
+}
+
+fn part1(codes: &Vec<String>) -> usize {
+    let costs = leveln_costs(4);
+    codes
+        .iter()
+        .map(|code| {
+            let numeric = numeric_part(&code);
+            let seq = code.chars().collect_vec();
+            let cost = seq_cost(&costs, &seq);
+            cost * numeric
+        })
+        .sum()
+}
+
+fn main() {
+    let fname = args().nth(1).unwrap();
+    let codes = parse(&fname);
+    println!("Part 1: {}", part1(&codes));
 }
