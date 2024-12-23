@@ -139,7 +139,7 @@ fn leveln_costs(n: usize) -> AllCosts {
     let dpad_moves = moves_dpad();
 
     let mut costs = human_costs(&dpad_moves);
-    for _ in 0..(n - 2) {
+    for _ in 0..n {
         costs = all_costs(&dpad_moves, &costs);
     }
     costs = all_costs(&num_moves, &costs);
@@ -151,8 +151,8 @@ fn numeric_part(code: &str) -> usize {
     non_digits.replace_all(code, "").parse().unwrap()
 }
 
-fn part1(codes: &Vec<String>) -> usize {
-    let costs = leveln_costs(4);
+fn solve(codes: &Vec<String>, n: usize) -> usize {
+    let costs = leveln_costs(n);
     codes
         .iter()
         .map(|code| {
@@ -167,5 +167,6 @@ fn part1(codes: &Vec<String>) -> usize {
 fn main() {
     let fname = args().nth(1).unwrap();
     let codes = parse(&fname);
-    println!("Part 1: {}", part1(&codes));
+    println!("Part 1: {}", solve(&codes, 2));
+    println!("Part 1: {}", solve(&codes, 25));
 }
