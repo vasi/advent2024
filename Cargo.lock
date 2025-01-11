@@ -17,6 +17,7 @@ dependencies = [
  "itertools 0.13.0",
  "pathfinding",
  "rational",
+ "rayon",
  "regex",
 ]
 

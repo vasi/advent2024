@@ -1,6 +1,7 @@
 use itertools::Itertools;
+use rayon::prelude::*;
 use regex::Regex;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env::args;
 use std::fs::read_to_string;
 
@@ -202,33 +203,38 @@ impl<'a> Circuit<'a> {
         errs
     }
 
-    fn names(&self) -> Vec<String> {
-        self.gates.iter().map(|g| g.output.clone()).collect()
+    fn names(&self) -> Vec<&'a String> {
+        self.gates.iter().map(|g| &g.output).collect()
     }
 
-    fn find_swap(&self, baseline: usize) -> Self {
+    fn find_swaps(&self, baseline: usize) -> Vec<(&String, &String)> {
         let mut names = self.names();
         names.sort();
-        for (g1, g2) in names.iter().tuple_combinations() {
-            println!("g1 = {}, g2 = {}", g1, g2);
-            let changed = self.with_swap(g1, g2);
-            let errs = changed.errors();
-            if errs < baseline {
-                println!("Found {}, {}. Errors = {}", g1, g2, errs);
-                return self.with_swap(g1, g2);
-            }
-        }
-        unreachable!()
+        let pairs: Vec<(&String, &String)> = names
+            .iter()
+            .tuple_combinations()
+            .map(|(g1, g2)| (*g1, *g2))
+            .collect();
+        println!("len: {}", pairs.len());
+        pairs
+            .par_iter()
+            .filter(|(g1, g2)| {
+                println!("{}, {}", g1, g2);
+                self.with_swap(g1, g2).errors() < baseline
+            })
+            .copied()
+            .collect()
     }
 
-    fn part2(mut circuit: Circuit) -> String {
-        let mut baseline = circuit.errors();
-        while baseline > 0 {
-            circuit = circuit.find_swap(baseline);
-            baseline = circuit.errors();
+    fn part2(&self) -> String {
+        let baseline = self.errors();
+        let pairs = self.find_swaps(baseline);
+        let mut swaps = HashSet::new();
+        for (g1, g2) in pairs {
+            swaps.insert(g1.clone());
+            swaps.insert(g2.clone());
         }
-
-        circuit.swaps.keys().sorted().join(",")
+        swaps.iter().join(",")
     }
 }
 
@@ -241,5 +247,5 @@ fn main() {
     };
 
     println!("Part 1: {}", circuit.part1(&mut inputs));
-    println!("Part 2: {}", Circuit::part2(circuit));
+    println!("Part 2: {}", circuit.part2());
 }
