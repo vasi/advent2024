@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::env::args;
 use std::fs::read_to_string;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 enum BinOp {
     And,
     Or,
@@ -22,7 +22,7 @@ impl BinOp {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Gate {
     left: String,
     right: String,
@@ -50,14 +50,17 @@ impl Gate {
     }
 }
 
+type Gates = Vec<Gate>;
+type Values = HashMap<String, bool>;
+
 #[derive(Debug)]
-struct Circuit {
-    inputs: HashMap<String, bool>,
-    gates: Vec<Gate>,
+struct Circuit<'a> {
+    gates: &'a Vec<Gate>,
+    swaps: HashMap<String, String>,
 }
 
-impl Circuit {
-    fn parse(fname: &str) -> Self {
+impl<'a> Circuit<'a> {
+    fn parse(fname: &str) -> (Gates, Values) {
         let mut inputs = HashMap::new();
         let mut gates = vec![];
 
@@ -82,20 +85,17 @@ impl Circuit {
                 });
             }
         }
-
-        Self { inputs, gates }
+        (gates, inputs)
     }
 
-    fn eval(&self) -> HashMap<String, bool> {
-        let mut outputs = self.inputs.clone();
-
+    fn eval(&self, values: &mut Values) {
         let mut ready = Vec::new();
         let mut gates: HashMap<&str, &Gate> =
             self.gates.iter().map(|g| (g.output.as_str(), g)).collect();
         let mut deps: HashMap<&str, Vec<&Gate>> = HashMap::new();
 
-        for gate in &self.gates {
-            if gate.is_ready(&outputs) {
+        for gate in self.gates {
+            if gate.is_ready(values) {
                 ready.push(gate.output.as_str());
             }
             for dep in gate.deps() {
@@ -103,24 +103,24 @@ impl Circuit {
             }
         }
 
-        while let Some(output) = ready.pop() {
-            let gate = gates.remove(output).unwrap();
-            let val = gate.eval(&outputs);
-            outputs.insert(gate.output.clone(), val);
+        while let Some(id) = ready.pop() {
+            let gate = gates.remove(id).unwrap();
+            let val = gate.eval(values);
 
-            if let Some(deps) = deps.remove(output) {
+            let real_output = self.swaps.get(id).cloned().unwrap_or(id.to_string());
+            values.insert(real_output.clone(), val);
+
+            if let Some(deps) = deps.remove(real_output.as_str()) {
                 for dep in deps {
-                    if dep.is_ready(&outputs) {
+                    if dep.is_ready(values) {
                         ready.push(dep.output.as_str());
                     }
                 }
             }
         }
-
-        outputs
     }
 
-    fn output(values: HashMap<String, bool>) -> i64 {
+    fn output(values: &Values) -> i64 {
         let outputs = values
             .iter()
             .filter(|(k, _)| k.starts_with("z"))
@@ -136,63 +136,110 @@ impl Circuit {
         ret
     }
 
-    fn part1(&self) -> i64 {
-        let eval = self.eval();
-        Self::output(eval)
+    fn part1(&self, values: &mut Values) -> i64 {
+        self.eval(values);
+        Self::output(&values)
     }
 
     fn name(prefix: &str, idx: usize) -> String {
         format!("{}{:02}", prefix, idx)
     }
 
-    fn set_input(&mut self, idx: usize, prefix: &str, n: i64) {
-        self.inputs
-            .insert(Self::name(prefix, idx), (n >> idx) & 1 != 0);
+    fn set_input(inputs: &mut Values, idx: usize, prefix: &str, n: i64) {
+        inputs.insert(Self::name(prefix, idx), (n >> idx) & 1 != 0);
     }
 
-    fn calculate(&mut self, x: i64, y: i64) -> i64 {
+    fn calculate(&self, x: i64, y: i64) -> i64 {
+        let mut inputs = Values::new();
         for i in 0..=44 {
-            self.set_input(i, "x", x);
-            self.set_input(i, "y", y);
+            Self::set_input(&mut inputs, i, "x", x);
+            Self::set_input(&mut inputs, i, "y", y);
         }
-        let results = self.eval();
-        Self::output(results)
+        self.eval(&mut inputs);
+        Self::output(&inputs)
     }
 
+    #[allow(dead_code)]
     fn bits_set(n: i64) -> Vec<usize> {
         (0..=45).filter(|i| (n >> i) & 1 != 0).collect()
     }
 
-    fn part2(&mut self) {
+    fn with_swap(&self, g1: &str, g2: &str) -> Self {
+        let mut swaps = self.swaps.clone();
+        swaps.insert(g1.to_string(), g2.to_string());
+        swaps.insert(g2.to_string(), g1.to_string());
+        Self {
+            gates: self.gates,
+            swaps,
+        }
+    }
+
+    fn errors(&self) -> usize {
+        let mut errs = 0;
         for i in 0..=44 {
             let z = self.calculate(1 << i, 0);
             if z != (1 << i) {
-                println!("x bit {} => {:?}", i, Self::bits_set(z));
+                errs += 1;
             }
 
             let z = self.calculate(0, 1 << i);
             if z != (1 << i) {
-                println!("y bit {} => {:?}", i, Self::bits_set(z));
+                errs += 1;
             }
 
             let z = self.calculate(1 << i, 1 << i);
             if z != (1 << (i + 1)) {
-                println!("both bit {} => {:?}", i, Self::bits_set(z));
+                errs += 1;
             }
 
             if i != 44 {
                 let z = self.calculate(3 << i, 3 << i);
                 if z != (3 << (i + 1)) {
-                    println!("3 bit {} => {:?}", i, Self::bits_set(z));
+                    errs += 1;
                 }
             }
         }
+        errs
+    }
+
+    fn names(&self) -> Vec<String> {
+        self.gates.iter().map(|g| g.output.clone()).collect()
+    }
+
+    fn find_swap(&self, baseline: usize) -> Self {
+        let mut names = self.names();
+        names.sort();
+        for (g1, g2) in names.iter().tuple_combinations() {
+            println!("g1 = {}, g2 = {}", g1, g2);
+            let changed = self.with_swap(g1, g2);
+            let errs = changed.errors();
+            if errs < baseline {
+                println!("Found {}, {}. Errors = {}", g1, g2, errs);
+                return self.with_swap(g1, g2);
+            }
+        }
+        unreachable!()
+    }
+
+    fn part2(mut circuit: Circuit) -> String {
+        let mut baseline = circuit.errors();
+        while baseline > 0 {
+            circuit = circuit.find_swap(baseline);
+            baseline = circuit.errors();
+        }
+
+        circuit.swaps.keys().sorted().join(",")
     }
 }
 
 fn main() {
     let fname = args().nth(1).unwrap();
-    let mut circuit = Circuit::parse(&fname);
-    // println!("Part 1: {}", circuit.part1());
-    circuit.part2();
+    let (gates, mut inputs) = Circuit::parse(&fname);
+    let circuit = Circuit {
+        gates: &gates,
+        swaps: HashMap::new(),
+    };
+
+    println!("Part 1: {}", circuit.part1(&mut inputs));
+    println!("Part 2: {}", Circuit::part2(circuit));
 }
