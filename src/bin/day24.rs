@@ -120,9 +120,8 @@ impl Circuit {
         outputs
     }
 
-    fn part1(&self) -> i64 {
-        let eval = self.eval();
-        let outputs = eval
+    fn output(values: HashMap<String, bool>) -> i64 {
+        let outputs = values
             .iter()
             .filter(|(k, _)| k.starts_with("z"))
             .sorted_by_key(|(k, _)| k.to_owned())
@@ -131,15 +130,69 @@ impl Circuit {
         let mut ret = 0;
         for (i, v) in outputs.iter().enumerate() {
             if **v {
-                ret += 2_i64.pow(i as u32);
+                ret += 1_i64 << i;
             }
         }
         ret
+    }
+
+    fn part1(&self) -> i64 {
+        let eval = self.eval();
+        Self::output(eval)
+    }
+
+    fn name(prefix: &str, idx: usize) -> String {
+        format!("{}{:02}", prefix, idx)
+    }
+
+    fn set_input(&mut self, idx: usize, prefix: &str, n: i64) {
+        self.inputs
+            .insert(Self::name(prefix, idx), (n >> idx) & 1 != 0);
+    }
+
+    fn calculate(&mut self, x: i64, y: i64) -> i64 {
+        for i in 0..=44 {
+            self.set_input(i, "x", x);
+            self.set_input(i, "y", y);
+        }
+        let results = self.eval();
+        Self::output(results)
+    }
+
+    fn bits_set(n: i64) -> Vec<usize> {
+        (0..=45).filter(|i| (n >> i) & 1 != 0).collect()
+    }
+
+    fn part2(&mut self) {
+        for i in 0..=44 {
+            let z = self.calculate(1 << i, 0);
+            if z != (1 << i) {
+                println!("x bit {} => {:?}", i, Self::bits_set(z));
+            }
+
+            let z = self.calculate(0, 1 << i);
+            if z != (1 << i) {
+                println!("y bit {} => {:?}", i, Self::bits_set(z));
+            }
+
+            let z = self.calculate(1 << i, 1 << i);
+            if z != (1 << (i + 1)) {
+                println!("both bit {} => {:?}", i, Self::bits_set(z));
+            }
+
+            if i != 44 {
+                let z = self.calculate(3 << i, 3 << i);
+                if z != (3 << (i + 1)) {
+                    println!("3 bit {} => {:?}", i, Self::bits_set(z));
+                }
+            }
+        }
     }
 }
 
 fn main() {
     let fname = args().nth(1).unwrap();
-    let circuit = Circuit::parse(&fname);
-    println!("Part 1: {}", circuit.part1());
+    let mut circuit = Circuit::parse(&fname);
+    // println!("Part 1: {}", circuit.part1());
+    circuit.part2();
 }
