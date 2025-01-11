@@ -1,7 +1,6 @@
 use itertools::Itertools;
-use rayon::prelude::*;
 use regex::Regex;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::env::args;
 use std::fs::read_to_string;
 
@@ -175,27 +174,31 @@ impl<'a> Circuit<'a> {
         }
     }
 
-    fn errors(&self) -> usize {
+    fn print_errors(&self) -> usize {
         let mut errs = 0;
         for i in 0..=44 {
             let z = self.calculate(1 << i, 0);
             if z != (1 << i) {
+                println!("x    bit {:2} => {:?}", i, Self::bits_set(z));
                 errs += 1;
             }
 
             let z = self.calculate(0, 1 << i);
             if z != (1 << i) {
+                println!("y    bit {:2} => {:?}", i, Self::bits_set(z));
                 errs += 1;
             }
 
             let z = self.calculate(1 << i, 1 << i);
             if z != (1 << (i + 1)) {
+                println!("both bit {:2} => {:?}", i, Self::bits_set(z));
                 errs += 1;
             }
 
             if i != 44 {
                 let z = self.calculate(3 << i, 3 << i);
                 if z != (3 << (i + 1)) {
+                    println!("3    bit {:2} => {:?}", i, Self::bits_set(z));
                     errs += 1;
                 }
             }
@@ -203,38 +206,14 @@ impl<'a> Circuit<'a> {
         errs
     }
 
-    fn names(&self) -> Vec<&'a String> {
-        self.gates.iter().map(|g| &g.output).collect()
-    }
-
-    fn find_swaps(&self, baseline: usize) -> Vec<(&String, &String)> {
-        let mut names = self.names();
-        names.sort();
-        let pairs: Vec<(&String, &String)> = names
-            .iter()
-            .tuple_combinations()
-            .map(|(g1, g2)| (*g1, *g2))
-            .collect();
-        println!("len: {}", pairs.len());
-        pairs
-            .par_iter()
-            .filter(|(g1, g2)| {
-                println!("{}, {}", g1, g2);
-                self.with_swap(g1, g2).errors() < baseline
-            })
-            .copied()
-            .collect()
-    }
-
     fn part2(&self) -> String {
-        let baseline = self.errors();
-        let pairs = self.find_swaps(baseline);
-        let mut swaps = HashSet::new();
-        for (g1, g2) in pairs {
-            swaps.insert(g1.clone());
-            swaps.insert(g2.clone());
-        }
-        swaps.iter().join(",")
+        let circuit = self
+            .with_swap("z14", "vss")
+            .with_swap("kdh", "hjf")
+            .with_swap("kpp", "z31")
+            .with_swap("sgj", "z35");
+        assert_eq!(circuit.print_errors(), 0);
+        circuit.swaps.keys().sorted().join(",")
     }
 }
 

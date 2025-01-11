@@ -22,5 +22,38 @@ Let's try some test inputs that help us understand what's going on. For each bit
 * x = just bit i, y = just bit i
 * x = bits i, i+1; y = bits i; i+1
 
-Conclusions after one round:
+# Conclusions
 
+## Near bit 14
+
+* Either bit 14, or two bits 13, causes bit 15 to be set
+* This indicates that z14 is swapped with something related to bit 15
+* Currently, z14 is the output of an OR! So it must be swapped with c14 = vss
+
+## Near bit 22
+
+* Either bit 22 results in 23 being set
+* Both bits 22 result in bit 22 being set. So likely one of the carry wires is swapped.
+* Some wires in this area:
+  * y22 XOR x22 -> hjf
+  * y22 AND x22 -> kdh
+  * bjb OR hjf -> sbg
+  * kdh XOR gjn -> z22
+* kdf and hjf appear swapped
+
+## Near bit 30
+
+* Either bit 31, or both bits 30, sets bit 32
+* Some wires in this area:
+  * x31 XOR y31 -> nrr
+  * nrr XOR sms -> kpp
+  * nrr AND sms -> z31
+* kpp and z31 are swapped
+
+## Near bit 35
+
+* Either bit 35 (or both 34) result in setting bit 36
+* Wires in the area:
+  * y35 AND x35 -> z35
+  * y35 XOR x35 -> bbc
+  * bbc XOR jkb -> sgj
